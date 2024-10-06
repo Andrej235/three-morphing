@@ -1,8 +1,10 @@
 import { useGLTF } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef, useState } from "react";
+import { useThree } from "@react-three/fiber";
+import { useEffect, useRef } from "react";
 import { Mesh, MeshBasicMaterial } from "three";
 import * as dat from "dat.gui";
+import { useGSAP } from "@gsap/react";
+import { gsap } from "gsap";
 
 export default function MorphingElement() {
   const {
@@ -14,7 +16,35 @@ export default function MorphingElement() {
   const { scene } = useThree();
   const meshRef = useRef<Mesh | null>(null);
   const guiRef = useRef<dat.GUI | null>(null);
-  const [runAnimation, setRunAnimation] = useState(false);
+  const animateToIdx = useRef(-1);
+
+  const { contextSafe } = useGSAP();
+
+  const animateToState = contextSafe((to: number) => {
+    if (!meshRef.current?.morphTargetInfluences) return;
+    const toObject: {
+      [key: number]: number;
+    } = {};
+
+    const morphTargetInfluences = meshRef.current.morphTargetInfluences;
+
+    if (to === -1) {
+      //Animate to default state, all morph targets to 0
+      for (let i = 0; i < morphTargetInfluences.length; i++) toObject[i] = 0;
+    } else {
+      //Animate to target state, 'to' morph target to 1 others to 0
+      if (to >= morphTargetInfluences.length) return; //Out of bounds
+
+      for (let i = 0; i < morphTargetInfluences.length; i++)
+        if (i !== to) toObject[i] = 0;
+        else toObject[i] = 1;
+    }
+
+    gsap.to(meshRef.current.morphTargetInfluences, {
+      ...toObject,
+      onUpdate: rebuildGUI,
+    });
+  });
 
   useEffect(() => {
     if (!element) return;
@@ -27,7 +57,9 @@ export default function MorphingElement() {
     scene.add(meshRef.current);
   }, [scene, element]);
 
-  useEffect(() => {
+  useEffect(rebuildGUI, [meshRef, animateToIdx]);
+
+  function rebuildGUI() {
     if (!meshRef.current?.morphTargetInfluences) return;
 
     if (guiRef.current) guiRef.current.destroy();
@@ -36,21 +68,18 @@ export default function MorphingElement() {
     for (let i = 0; i < meshRef.current.morphTargetInfluences.length; i++)
       guiRef.current.add(meshRef.current.morphTargetInfluences, i, 0, 1, 0.01);
 
+    const dropdown = guiRef.current.add(animateToIdx, "current", [
+      ...Array(meshRef.current.morphTargetInfluences.length + 1).keys(),
+    ]);
+    dropdown.setValue(dropdown.getValue() < 0 ? 0 : dropdown.getValue());
+
     guiRef.current.add(
       {
-        ToggleAnimation: () => void setRunAnimation(!runAnimation),
+        "Start animation": () => void animateToState(animateToIdx.current - 1),
       },
-      "ToggleAnimation"
+      "Start animation"
     );
-  }, [meshRef.current, runAnimation]);
-
-  useFrame(({ clock: { elapsedTime: time } }) => {
-    if (!meshRef.current?.morphTargetInfluences || !runAnimation) return;
-
-    meshRef.current.morphTargetInfluences[0] = Math.sin(time * 2) * 0.5 + 0.5;
-    meshRef.current.morphTargetInfluences[1] =
-      1 - (Math.sin(time * 2) * 0.5 + 0.5);
-  });
+  }
 
   return <></>;
 }
