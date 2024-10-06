@@ -19,6 +19,7 @@ export default function MorphingElement() {
   const animateToIdx = useRef(-1);
 
   const { contextSafe } = useGSAP();
+  const currentTween = useRef<gsap.core.Tween | null>(null);
 
   const animateToState = contextSafe((to: number) => {
     if (!meshRef.current?.morphTargetInfluences) return;
@@ -40,9 +41,12 @@ export default function MorphingElement() {
         else toObject[i] = 1;
     }
 
-    gsap.to(meshRef.current.morphTargetInfluences, {
+    if (currentTween.current) currentTween.current.kill();
+    currentTween.current = gsap.to(meshRef.current.morphTargetInfluences, {
       ...toObject,
-      onUpdate: rebuildGUI,
+      duration: 0.7,
+      onUpdate: () => void guiRef.current?.updateDisplay(),
+      onComplete: () => void (currentTween.current = null),
     });
   });
 
