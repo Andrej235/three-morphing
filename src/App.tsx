@@ -5,7 +5,7 @@ import { OrbitControls } from "@react-three/drei";
 function App() {
   return (
     <Canvas>
-      <MorphingElement />
+      <MorphingElement elementPath="morphing.glb" />
       <OrbitControls />
     </Canvas>
   );
